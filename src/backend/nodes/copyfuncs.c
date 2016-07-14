@@ -1098,6 +1098,7 @@ _copyConst(const Const *from)
 	COPY_SCALAR_FIELD(constisnull);
 	COPY_SCALAR_FIELD(constbyval);
 	COPY_LOCATION_FIELD(location);
+	COPY_SCALAR_FIELD(paramid);
 
 	return newnode;
 }

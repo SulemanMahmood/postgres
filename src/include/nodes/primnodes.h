@@ -177,6 +177,8 @@ typedef struct Const
 								 * in the Datum. If false, then the Datum
 								 * contains a pointer to the information. */
 	int			location;		/* token location, or -1 if unknown */
+	int			paramid;		/* if param replaces then it stores paramid.
+								 * This makes sense only when location = -1 */
 } Const;
 
 /* ----------------

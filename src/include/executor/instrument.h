@@ -69,5 +69,6 @@ extern Instrumentation *InstrAlloc(int n, int instrument_options);
 extern void InstrStartNode(Instrumentation *instr);
 extern void InstrStopNode(Instrumentation *instr, double nTuples);
 extern void InstrEndLoop(Instrumentation *instr);
+extern void PrintLogs(char * str);
 
 #endif   /* INSTRUMENT_H */

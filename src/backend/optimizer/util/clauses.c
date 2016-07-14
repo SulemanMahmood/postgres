@@ -51,6 +51,7 @@
 #include "utils/syscache.h"
 #include "utils/typcache.h"
 
+#include "nodes/primnodes.h"
 
 typedef struct
 {
@@ -2367,6 +2368,7 @@ eval_const_expressions_mutator(Node *node,
 							int16		typLen;
 							bool		typByVal;
 							Datum		pval;
+							Const* TempConst;
 
 							Assert(prm->ptype == param->paramtype);
 							get_typlenbyval(param->paramtype,
@@ -2375,13 +2377,15 @@ eval_const_expressions_mutator(Node *node,
 								pval = prm->value;
 							else
 								pval = datumCopy(prm->value, typByVal, typLen);
-							return (Node *) makeConst(param->paramtype,
+							TempConst = makeConst(param->paramtype,
 													  param->paramtypmod,
 													  param->paramcollid,
 													  (int) typLen,
 													  pval,
 													  prm->isnull,
 													  typByVal);
+							TempConst->paramid = ((Param *)node)->paramid;
+							return (Node *)TempConst;
 						}
 					}
 				}

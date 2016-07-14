@@ -148,3 +148,12 @@ BufferUsageAccumDiff(BufferUsage *dst,
 	INSTR_TIME_ACCUM_DIFF(dst->blk_write_time,
 						  add->blk_write_time, sub->blk_write_time);
 }
+
+
+void PrintLogs(char * str)
+{
+	FILE * TraceLog = fopen("/home/suleman/TraceLog.txt","a");
+	fprintf(TraceLog, "%s" ,str);
+	fclose(TraceLog);
+	return;
+}

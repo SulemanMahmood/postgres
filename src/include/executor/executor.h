@@ -16,6 +16,7 @@
 
 #include "executor/execdesc.h"
 #include "nodes/parsenodes.h"
+#include "./../pl/plpgsql/src/plpgsql.h"
 
 
 /*
@@ -365,5 +366,6 @@ extern void RegisterExprContextCallback(ExprContext *econtext,
 extern void UnregisterExprContextCallback(ExprContext *econtext,
 							  ExprContextCallbackFunction function,
 							  Datum arg);
+extern void PrintPlan(Expr *node, PlanState *parent, PLpgSQL_execstate * estate);
 
 #endif   /* EXECUTOR_H  */
