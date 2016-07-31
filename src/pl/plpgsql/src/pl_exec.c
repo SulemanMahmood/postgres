@@ -38,6 +38,7 @@
 #include "utils/snapmgr.h"
 #include "utils/typcache.h"
 
+#include "executor/executor.h"
 
 static const char *const raise_skip_msg = "RAISE";
 
@@ -339,6 +340,12 @@ plpgsql_exec_function(PLpgSQL_function *func, FunctionCallInfo fcinfo,
 	/*
 	 * Now call the toplevel block of statements
 	 */
+	{
+		char str[100];
+		sprintf(str, "START_FUNCTION\t%d\n",func->fn_oid);
+		PrintLogs(str);
+	}
+
 	estate.err_text = NULL;
 	estate.err_stmt = (PLpgSQL_stmt *) (func->action);
 	rc = exec_stmt_block(&estate, func->action);
@@ -496,6 +503,12 @@ plpgsql_exec_function(PLpgSQL_function *func, FunctionCallInfo fcinfo,
 	/*
 	 * Return the function's result
 	 */
+	{
+		char str[100];
+		sprintf(str, "END_FUNCTION\t%d\n",func->fn_oid);
+		PrintLogs(str);
+	}
+
 	return estate.retval;
 }
 
@@ -1080,6 +1093,12 @@ exec_stmt_block(PLpgSQL_execstate *estate, PLpgSQL_stmt_block *block)
 						{
 							bool		valIsNull = true;
 
+							if (estate->func->fn_is_trigger == PLPGSQL_NOT_TRIGGER ){
+								char str[100];
+								sprintf(str,"PLPGSQL_STMT_ASSIGN\t%d %s\t", var->datatype->typoid , var->refname );
+								PrintLogs(str);
+							}
+
 							exec_assign_value(estate,
 											  (PLpgSQL_datum *) var,
 											  (Datum) 0,
@@ -1094,6 +1113,11 @@ exec_stmt_block(PLpgSQL_execstate *estate, PLpgSQL_stmt_block *block)
 					}
 					else
 					{
+						if (estate->func->fn_is_trigger == PLPGSQL_NOT_TRIGGER ){
+							char str[100];
+							sprintf(str,"PLPGSQL_STMT_ASSIGN\t%d %s\t", var->datatype->typoid , var->refname );
+							PrintLogs(str);
+						}
 						exec_assign_expr(estate, (PLpgSQL_datum *) var,
 										 var->default_val);
 					}
@@ -1392,18 +1416,30 @@ exec_stmt(PLpgSQL_execstate *estate, PLpgSQL_stmt *stmt)
 	switch ((enum PLpgSQL_stmt_types) stmt->cmd_type)
 	{
 		case PLPGSQL_STMT_BLOCK:
+			PrintLogs("PLPGSQL_STMT_BLOCK\n");
 			rc = exec_stmt_block(estate, (PLpgSQL_stmt_block *) stmt);
 			break;
 
 		case PLPGSQL_STMT_ASSIGN:
+
+			if (estate->func->fn_is_trigger == PLPGSQL_NOT_TRIGGER ){
+				char str[100];
+				PLpgSQL_stmt_assign * statement = (PLpgSQL_stmt_assign *) stmt;
+				PLpgSQL_var * target = (PLpgSQL_var *)(estate->datums[statement->varno]);
+				sprintf(str,"PLPGSQL_STMT_ASSIGN\t%d %s\t", target->datatype->typoid , target->refname );
+				PrintLogs(str);
+			}
+
 			rc = exec_stmt_assign(estate, (PLpgSQL_stmt_assign *) stmt);
 			break;
 
 		case PLPGSQL_STMT_PERFORM:
+			PrintLogs("PLPGSQL_STMT_PERFORM\n");
 			rc = exec_stmt_perform(estate, (PLpgSQL_stmt_perform *) stmt);
 			break;
 
 		case PLPGSQL_STMT_GETDIAG:
+			PrintLogs("PLPGSQL_STMT_GETDIAG\n");
 			rc = exec_stmt_getdiag(estate, (PLpgSQL_stmt_getdiag *) stmt);
 			break;
 
@@ -1412,74 +1448,95 @@ exec_stmt(PLpgSQL_execstate *estate, PLpgSQL_stmt *stmt)
 			break;
 
 		case PLPGSQL_STMT_CASE:
+			PrintLogs("PLPGSQL_STMT_CASE\n");
 			rc = exec_stmt_case(estate, (PLpgSQL_stmt_case *) stmt);
 			break;
 
 		case PLPGSQL_STMT_LOOP:
+			PrintLogs("PLPGSQL_STMT_LOOP\n");
 			rc = exec_stmt_loop(estate, (PLpgSQL_stmt_loop *) stmt);
 			break;
 
 		case PLPGSQL_STMT_WHILE:
+			PrintLogs("PLPGSQL_STMT_WHILE\n");
 			rc = exec_stmt_while(estate, (PLpgSQL_stmt_while *) stmt);
 			break;
 
 		case PLPGSQL_STMT_FORI:
+			PrintLogs("PLPGSQL_STMT_FORI\n");
 			rc = exec_stmt_fori(estate, (PLpgSQL_stmt_fori *) stmt);
 			break;
 
 		case PLPGSQL_STMT_FORS:
+			PrintLogs("PLPGSQL_STMT_FORS\n");
 			rc = exec_stmt_fors(estate, (PLpgSQL_stmt_fors *) stmt);
+			PrintLogs("PLPGSQL_STMT_FORS_END\n");
 			break;
 
 		case PLPGSQL_STMT_FORC:
+			PrintLogs("PLPGSQL_STMT_FORC\n");
 			rc = exec_stmt_forc(estate, (PLpgSQL_stmt_forc *) stmt);
 			break;
 
 		case PLPGSQL_STMT_FOREACH_A:
+			PrintLogs("PLPGSQL_STMT_FOREACH_A\n");
 			rc = exec_stmt_foreach_a(estate, (PLpgSQL_stmt_foreach_a *) stmt);
 			break;
 
 		case PLPGSQL_STMT_EXIT:
+			PrintLogs("PLPGSQL_STMT_EXIT\n");
 			rc = exec_stmt_exit(estate, (PLpgSQL_stmt_exit *) stmt);
 			break;
 
 		case PLPGSQL_STMT_RETURN:
+			PrintLogs("PLPGSQL_STMT_RETURN\t");
 			rc = exec_stmt_return(estate, (PLpgSQL_stmt_return *) stmt);
 			break;
 
 		case PLPGSQL_STMT_RETURN_NEXT:
+			PrintLogs("PLPGSQL_STMT_RETURN_NEXT\n");
 			rc = exec_stmt_return_next(estate, (PLpgSQL_stmt_return_next *) stmt);
 			break;
 
 		case PLPGSQL_STMT_RETURN_QUERY:
+			PrintLogs("PLPGSQL_STMT_RETURN_QUERY\n");
 			rc = exec_stmt_return_query(estate, (PLpgSQL_stmt_return_query *) stmt);
 			break;
 
 		case PLPGSQL_STMT_RAISE:
+			PrintLogs("PLPGSQL_STMT_RAISE\t");
 			rc = exec_stmt_raise(estate, (PLpgSQL_stmt_raise *) stmt);
+			PrintLogs("\n");
 			break;
 
 		case PLPGSQL_STMT_EXECSQL:
+			PrintLogs("PLPGSQL_STMT_EXECSQL\n");
 			rc = exec_stmt_execsql(estate, (PLpgSQL_stmt_execsql *) stmt);
+			PrintLogs("PLPGSQL_STMT_EXECSQL_END\n");
 			break;
 
 		case PLPGSQL_STMT_DYNEXECUTE:
+			PrintLogs("PLPGSQL_STMT_DYNEXECUTE\n");
 			rc = exec_stmt_dynexecute(estate, (PLpgSQL_stmt_dynexecute *) stmt);
 			break;
 
 		case PLPGSQL_STMT_DYNFORS:
+			PrintLogs("PLPGSQL_STMT_DYNFORS\n");
 			rc = exec_stmt_dynfors(estate, (PLpgSQL_stmt_dynfors *) stmt);
 			break;
 
 		case PLPGSQL_STMT_OPEN:
+			PrintLogs("PLPGSQL_STMT_OPEN\n");
 			rc = exec_stmt_open(estate, (PLpgSQL_stmt_open *) stmt);
 			break;
 
 		case PLPGSQL_STMT_FETCH:
+			PrintLogs("PLPGSQL_STMT_FETCH\n");
 			rc = exec_stmt_fetch(estate, (PLpgSQL_stmt_fetch *) stmt);
 			break;
 
 		case PLPGSQL_STMT_CLOSE:
+			PrintLogs("PLPGSQL_STMT_CLOSE\n");
 			rc = exec_stmt_close(estate, (PLpgSQL_stmt_close *) stmt);
 			break;
 
@@ -1654,7 +1711,9 @@ exec_stmt_if(PLpgSQL_execstate *estate, PLpgSQL_stmt_if *stmt)
 	bool		isnull;
 	ListCell   *lc;
 
+	PrintLogs("PLPGSQL_STMT_IF\t");
 	value = exec_eval_boolean(estate, stmt->cond, &isnull);
+	PrintLogs("PLPGSQL_STMT_IF_END\n");
 	exec_eval_cleanup(estate);
 	if (!isnull && value)
 		return exec_stmts(estate, stmt->then_body);
@@ -1663,7 +1722,9 @@ exec_stmt_if(PLpgSQL_execstate *estate, PLpgSQL_stmt_if *stmt)
 	{
 		PLpgSQL_if_elsif *elif = (PLpgSQL_if_elsif *) lfirst(lc);
 
+		PrintLogs("PLPGSQL_STMT_IF\t");
 		value = exec_eval_boolean(estate, elif->cond, &isnull);
+		PrintLogs("PLPGSQL_STMT_IF_END\n");
 		exec_eval_cleanup(estate);
 		if (!isnull && value)
 			return exec_stmts(estate, elif->stmts);
@@ -1774,9 +1835,11 @@ exec_stmt_loop(PLpgSQL_execstate *estate, PLpgSQL_stmt_loop *stmt)
 		switch (rc)
 		{
 			case PLPGSQL_RC_OK:
+				PrintLogs("PLPGSQL_STMT_LOOP_PLPGSQL_RC_OK\n");
 				break;
 
 			case PLPGSQL_RC_EXIT:
+				PrintLogs("PLPGSQL_STMT_LOOP_PLPGSQL_RC_EXIT\n");
 				if (estate->exitlabel == NULL)
 					return PLPGSQL_RC_OK;
 				if (stmt->label == NULL)
@@ -1787,6 +1850,7 @@ exec_stmt_loop(PLpgSQL_execstate *estate, PLpgSQL_stmt_loop *stmt)
 				return PLPGSQL_RC_OK;
 
 			case PLPGSQL_RC_CONTINUE:
+				PrintLogs("PLPGSQL_STMT_LOOP_PLPGSQL_RC_CONTINUE\n");
 				if (estate->exitlabel == NULL)
 					/* anonymous continue, so re-run the loop */
 					break;
@@ -1800,6 +1864,7 @@ exec_stmt_loop(PLpgSQL_execstate *estate, PLpgSQL_stmt_loop *stmt)
 				break;
 
 			case PLPGSQL_RC_RETURN:
+				PrintLogs("PLPGSQL_STMT_LOOP_PLPGSQL_RC_RETURN\n");
 				return rc;
 
 			default:
@@ -2453,6 +2518,7 @@ exec_stmt_return(PLpgSQL_execstate *estate, PLpgSQL_stmt_return *stmt)
 	{
 		PLpgSQL_datum *retvar = estate->datums[stmt->retvarno];
 
+		PrintLogs("OUT_PARAMS_IN_ARGS");
 		switch (retvar->dtype)
 		{
 			case PLPGSQL_DTYPE_VAR:
@@ -3393,6 +3459,7 @@ exec_stmt_execsql(PLpgSQL_execstate *estate,
 		PLpgSQL_rec *rec = NULL;
 		PLpgSQL_row *row = NULL;
 
+		PrintLogs("Into\t");
 		/* If the statement did not return a tuple table, complain */
 		if (tuptab == NULL)
 			ereport(ERROR,
@@ -3448,6 +3515,7 @@ exec_stmt_execsql(PLpgSQL_execstate *estate,
 						 errdetail ? errdetail_internal("parameters: %s", errdetail) : 0));
 			}
 			/* Put the first result row into the target */
+
 			exec_move_row(estate, rec, row, tuptab->vals[0], tuptab->tupdesc);
 		}
 
@@ -3464,6 +3532,8 @@ exec_stmt_execsql(PLpgSQL_execstate *estate,
 					 errmsg("query has no destination for result data"),
 					 (rc == SPI_OK_SELECT) ? errhint("If you want to discard the results of a SELECT, use PERFORM instead.") : 0));
 	}
+
+	PrintLogs("\n");
 
 	if (paramLI)
 		pfree(paramLI);
@@ -3990,6 +4060,7 @@ exec_assign_expr(PLpgSQL_execstate *estate, PLpgSQL_datum *target,
 	bool		isnull = false;
 
 	value = exec_eval_expr(estate, expr, &isnull, &valtype);
+
 	exec_assign_value(estate, target, value, valtype, &isnull);
 	exec_eval_cleanup(estate);
 }
@@ -4787,12 +4858,20 @@ exec_eval_expr(PLpgSQL_execstate *estate,
 	 * If this is a simple expression, bypass SPI and use the executor
 	 * directly
 	 */
+
+	if ( (Expr *)(expr->expr_simple_expr) != NULL ){
+		PrintPlan((Expr *)(expr->expr_simple_expr), NULL, estate);
+		PrintLogs("\n");
+	}
+
 	if (exec_eval_simple_expr(estate, expr, &result, isNull, rettype))
 		return result;
 
 	/*
 	 * Else do it the hard way via exec_run_select
 	 */
+
+	PrintLogs("COMPLEX_CONDITION\n");
 	rc = exec_run_select(estate, expr, 2, NULL);
 	if (rc != SPI_OK_SELECT)
 		ereport(ERROR,
@@ -4922,8 +5001,12 @@ exec_for_query(PLpgSQL_execstate *estate, PLpgSQL_stmt_forq *stmt,
 	/*
 	 * Determine if we assign to a record or a row
 	 */
-	if (stmt->rec != NULL)
+	if (stmt->rec != NULL){
+		char str[100];
+		sprintf(str, "%s\tREC %s\t\n", "PLPGSQL_STMT_FORS_QUERY_COMPLETE", stmt->rec->refname);
+		PrintLogs(str);
 		rec = (PLpgSQL_rec *) (estate->datums[stmt->rec->dno]);
+	}
 	else if (stmt->row != NULL)
 		row = (PLpgSQL_row *) (estate->datums[stmt->row->dno]);
 	else
@@ -4965,6 +5048,7 @@ exec_for_query(PLpgSQL_execstate *estate, PLpgSQL_stmt_forq *stmt,
 
 		for (i = 0; i < n; i++)
 		{
+			PrintLogs("PLPGSQL_STMT_FORS_LOOP_START\n");
 			/*
 			 * Assign the tuple to the target
 			 */
@@ -4980,6 +5064,7 @@ exec_for_query(PLpgSQL_execstate *estate, PLpgSQL_stmt_forq *stmt,
 			{
 				if (rc == PLPGSQL_RC_EXIT)
 				{
+					PrintLogs("PLPGSQL_STMT_FORS_LOOP_EXIT\n");
 					if (estate->exitlabel == NULL)
 					{
 						/* unlabelled exit, so exit the current loop */
@@ -5001,6 +5086,7 @@ exec_for_query(PLpgSQL_execstate *estate, PLpgSQL_stmt_forq *stmt,
 				}
 				else if (rc == PLPGSQL_RC_CONTINUE)
 				{
+					PrintLogs("PLPGSQL_STMT_FORS_LOOP_EXIT\n");
 					if (estate->exitlabel == NULL)
 					{
 						/* unlabelled continue, so re-run the current loop */
@@ -5030,6 +5116,7 @@ exec_for_query(PLpgSQL_execstate *estate, PLpgSQL_stmt_forq *stmt,
 				 */
 				goto loop_exit;
 			}
+			PrintLogs("PLPGSQL_STMT_FORS_LOOP_END\n");
 		}
 
 		SPI_freetuptable(tuptab);
@@ -5472,6 +5559,11 @@ exec_move_row(PLpgSQL_execstate *estate,
 
 			var = (PLpgSQL_var *) (estate->datums[row->varnos[fnum]]);
 
+			{
+				char str[100];
+				sprintf(str,"%d %s\t",var->datatype->typoid, var->refname);
+				PrintLogs(str);
+			}
 			while (anum < td_natts && tupdesc->attrs[anum]->attisdropped)
 				anum++;			/* skip dropped column in tuple */
 

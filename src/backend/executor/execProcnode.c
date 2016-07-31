@@ -180,13 +180,13 @@ ExecInitNode(Plan *node, EState *estate, int eflags)
 
 				//Print Command Type
 				if ( ((ModifyTable *)node)->operation == CMD_INSERT ){
-					sprintf(str,"CMD_INSERT\t%s\t",((ModifyTableState *)result)->resultRelInfo->ri_RelationDesc->rd_rel->relname.data);
+					sprintf(str,"CMD_INSERT\t%d\t",((ModifyTableState *)result)->resultRelInfo->ri_RelationDesc->rd_id);
 				}
 				else if ( ((ModifyTable *)node)->operation == CMD_UPDATE ){
-					sprintf(str,"CMD_UPDATE\t%s\t",((ModifyTableState *)result)->resultRelInfo->ri_RelationDesc->rd_rel->relname.data);
+					sprintf(str,"CMD_UPDATE\t%d\t",((ModifyTableState *)result)->resultRelInfo->ri_RelationDesc->rd_id);
 				}
 				else if ( ((ModifyTable *)node)->operation == CMD_DELETE ){
-					sprintf(str,"CMD_DELETE\t%s\t",((ModifyTableState *)result)->resultRelInfo->ri_RelationDesc->rd_rel->relname.data);
+					sprintf(str,"CMD_DELETE\t%d\t",((ModifyTableState *)result)->resultRelInfo->ri_RelationDesc->rd_id);
 				}
 				PrintLogs(str);
 
@@ -235,7 +235,7 @@ ExecInitNode(Plan *node, EState *estate, int eflags)
 				if ( (strcmp(table,"pg_type") != 0)  )
 				{
 					char str[100];
-					sprintf(str, "T_SeqScan\t%s\t", ((SeqScanState *)result)->ss_currentRelation->rd_rel->relname.data);
+					sprintf(str, "T_SeqScan\t%d\t", ((SeqScanState *)result)->ss_currentRelation->rd_id);
 					PrintLogs(str);
 
 					// Print TargetList
@@ -262,7 +262,7 @@ ExecInitNode(Plan *node, EState *estate, int eflags)
 				if ( (strcmp(table,"pg_type") != 0)  )
 				{
 					char str[100];
-					sprintf(str, "T_IndexScan\t%s\t", ((IndexScanState *)result)->ss.ss_currentRelation->rd_rel->relname.data);
+					sprintf(str, "T_IndexScan\t%d\t", ((IndexScanState *)result)->ss.ss_currentRelation->rd_id);
 					PrintLogs(str);
 
 					// Print TargetList
@@ -1004,23 +1004,25 @@ void PrintPlan(Expr *node, PlanState *parent, PLpgSQL_execstate * estate)
 				char str[100];
 				if (((Var *) node)->varattno > 0){
 					if (parent->type == T_SeqScanState){
-						sprintf(str,"Col %s\t", (((SeqScanState *)parent)->ss_ScanTupleSlot->tts_tupleDescriptor->attrs[(((Var *) node)->varattno)-1])->attname.data );
+						sprintf(str,"Col %d %s\t", (((SeqScanState *)parent)->ss_ScanTupleSlot->tts_tupleDescriptor->attrs[(((Var *) node)->varattno)-1])->atttypid ,
+													(((SeqScanState *)parent)->ss_ScanTupleSlot->tts_tupleDescriptor->attrs[(((Var *) node)->varattno)-1])->attname.data );
 					}
 					else if (parent->type == T_IndexScanState ){
-						sprintf(str,"Col %s\t", (((IndexScanState *)parent)->ss.ss_ScanTupleSlot->tts_tupleDescriptor->attrs[(((Var *) node)->varattno)-1])->attname.data );
+						sprintf(str,"Col %d %s\t", (((IndexScanState *)parent)->ss.ss_ScanTupleSlot->tts_tupleDescriptor->attrs[(((Var *) node)->varattno)-1])->atttypid ,
+													(((IndexScanState *)parent)->ss.ss_ScanTupleSlot->tts_tupleDescriptor->attrs[(((Var *) node)->varattno)-1])->attname.data );
 					}
 					else if (parent->type == T_HashJoinState || parent->type == T_MergeJoinState || parent->type == T_NestLoopState ){
 						Var * Variable = (Var *)node;
 						if (Variable->varno == INNER_VAR){
-							sprintf(str,"Col INNER.%d\t", (Variable->varattno) - 1);
+							sprintf(str,"Col %d INNER.%d\t", Variable->vartype , (Variable->varattno) - 1);
 						}
 						else if (Variable->varno == OUTER_VAR){
-							sprintf(str,"Col OUTER.%d\t", (Variable->varattno) - 1);
+							sprintf(str,"Col %d OUTER.%d\t", Variable->vartype , (Variable->varattno) - 1);
 						}
 					}
 				}
 				else if (((Var *) node)->varattno == -1){
-					sprintf(str,"Col ctid\t");
+					sprintf(str,"Col ctid ctid\t");
 				}
 				PrintLogs(str);
 			}
@@ -1032,36 +1034,14 @@ void PrintPlan(Expr *node, PlanState *parent, PLpgSQL_execstate * estate)
 				for (i = 0; i < 200; i++){
 					str[i] = '\0';
 				}
+				if (((Const *)node)->constisnull){
+					sprintf(str,"%d NULL\t", ((Const *)node)->consttype);
+				}
 
-				if ( (((Const *)node)->location == -1) && ((Const *)node)->paramid >=1){
-					if (parent->type == T_SeqScanState ){
-						ParamListInfo params =  ((SeqScanState*) parent)->ps.ps_ExprContext->ecxt_param_list_info;
-						if (params != NULL){
-							if (params->paramFetchArg != NULL){
-								sprintf(str,"Param %s\t", ((PLpgSQL_var *)(((PLpgSQL_execstate *)(params->paramFetchArg))->datums[((Const *)node)->paramid - 1]))->refname);
-							}
-						}
-					}
-					else if (parent->type == T_IndexScanState ){
-						ParamListInfo params =  ((IndexScanState*) parent)->ss.ps.ps_ExprContext->ecxt_param_list_info;
-						if (params != NULL){
-							if (params->paramFetchArg != NULL){
-								sprintf(str,"Param %s\t", ((PLpgSQL_var *)(((PLpgSQL_execstate *)(params->paramFetchArg))->datums[((Const *)node)->paramid - 1]))->refname);
-							}
-						}
-					}
-					else if (parent->type == T_ResultState ){
-						ParamListInfo params =  ((ResultState *) parent)->ps.ps_ExprContext->ecxt_param_list_info;
-						if (params != NULL){
-							if (params->paramFetchArg != NULL){
-								sprintf(str,"Param %s\t", ((PLpgSQL_var *)(((PLpgSQL_execstate *)(params->paramFetchArg))->datums[((Const *)node)->paramid - 1]))->refname);
-							}
-						}
-					}
+				else if ( (((Const *)node)->location == -1) && ((Const *)node)->paramid >=1){
+					sprintf(str,"Param %d %s\t", ((Const *)node)->consttype, ((Const *)node)->refname);
 				}
-				else if (((Const *)node)->constisnull){
-					sprintf(str,"NULL\t");
-				}
+
 				else{
 					Const * Constant = (Const *)node;
 					if (Constant->consttype >=20 && Constant->consttype <=23){  // Integer
@@ -1075,11 +1055,22 @@ void PrintPlan(Expr *node, PlanState *parent, PLpgSQL_execstate * estate)
 							sprintf(str,"%d %s\t", Constant->consttype, "False");
 						}
 					}
-					else if (Constant->consttype == 25){
+					else if ( (Constant->consttype == 25) || (Constant->consttype == 1043) ){
 						text * ConstString = (text *)(Constant->constvalue);
+						int StringLength = 0;
 						char value[100];
+
+						StringLength = StringLength | ((int)(ConstString->vl_len_[3]));
+						StringLength = StringLength << 8;
+						StringLength = StringLength | ((int)(ConstString->vl_len_[2]));
+						StringLength = StringLength << 8;
+						StringLength = StringLength | ((int)(ConstString->vl_len_[1]));
+						StringLength = StringLength << 8;
+						StringLength = StringLength | ((int)(ConstString->vl_len_[0]));
+						StringLength = (StringLength/4) - 4;
+
 						i = 0;
-						while ((ConstString->vl_dat)[i] != '~'){
+						while (i < StringLength){
 							value[i] = (ConstString->vl_dat)[i];
 							i++;
 							if (i == 99){
@@ -1088,6 +1079,44 @@ void PrintPlan(Expr *node, PlanState *parent, PLpgSQL_execstate * estate)
 						}
 						value[i] = '\0';
 						sprintf(str,"%d %s\t", Constant->consttype,value);
+					}
+					else if (Constant->consttype == 1042){
+						text * ConstString = (text *)(Constant->constvalue);
+						char value;
+
+						value = ConstString->vl_dat[0];
+						sprintf(str,"%d %c\t", Constant->consttype,value);
+					}
+/*					else if (Constant->consttype == 1007){
+						ArrayType * arr = (ArrayType *)(Constant->constvalue);
+						int16		typlen;
+						bool		typbyval;
+						char		typalign;
+						int			nitems;
+						char * 		s;
+						int			i;
+
+						get_typlenbyvalalign(ARR_ELEMTYPE(arr),
+											 &typlen,
+											 &typbyval,
+											 &typalign);
+
+						s = (char *) ARR_DATA_PTR(arr);
+
+						for (i = 0; i < nitems; i++){
+							Datum elt = fetch_att(s, typbyval, typlen);
+
+							if (Constant->consttype == 1007){	// Integer Array: elt is integer
+								sprintf(str,"%d %d\t", ARR_ELEMTYPE(arr), (int)elt);
+							}
+
+							s = att_addlength_pointer(s, typlen, s);
+							s = (char *) att_align_nominal(s, typalign);
+						}
+
+					}*/
+					else if (Constant->consttype == 2205){
+						sprintf(str,"%d %d\t", Constant->consttype,(int)Constant->constvalue);
 					}
 					else{
 						sprintf(str, "%d NotImplemented\t", Constant->consttype);
@@ -1101,14 +1130,15 @@ void PrintPlan(Expr *node, PlanState *parent, PLpgSQL_execstate * estate)
 			switch (((Param *) node)->paramkind)
 			{
 				char str[100];
+				str[0] = '\0';
 
 				case PARAM_EXEC:
 					if (parent != NULL){
 						if ((parent->ps_ExprContext->ecxt_param_exec_vals[((Param *) node)->paramid]).value == 0){
-							sprintf(str, "%d %s", 16, "False");
+							sprintf(str, "%d %s\t", 16, "False");
 						}
 						else{
-							sprintf(str, "%d %s", 16, "True");
+							sprintf(str, "%d %s\t", 16, "True");
 						}
 
 						PrintLogs(str);
@@ -1118,21 +1148,31 @@ void PrintPlan(Expr *node, PlanState *parent, PLpgSQL_execstate * estate)
 					{
 						if (((Param *)node)->paramid >= 1){
 							if (parent == NULL){
-								sprintf(str,"Param %s\t", ((PLpgSQL_var *)(estate->datums[((Param *)node)->paramid - 1]))->refname);
+								int parentid = ((PLpgSQL_var *)(estate->datums[((Param *)node)->paramid - 1]))->dno;
+								if ( (((PLpgSQL_var *)(estate->datums[((Param *)node)->paramid - 1]))->dtype ) != 3 ){
+									sprintf(str,"Param %d %s\t", ((PLpgSQL_var *)(estate->datums[((Param *)node)->paramid - 1]))->dtype,
+										((PLpgSQL_var *)(estate->datums[((Param *)node)->paramid - 1]))->refname);
+								}
+								else {
+									sprintf(str,"Param %d %s.%s\t", ((PLpgSQL_var *)(estate->datums[((Param *)node)->paramid - 1]))->dtype ,
+																	((PLpgSQL_var *)(estate->datums[parentid - 1]))->refname,
+																	((PLpgSQL_var *)(estate->datums[((Param *)node)->paramid - 1]))->refname);
+								}
 							}
 							else if (parent->type == T_SeqScanState ){
 								ParamListInfo params =  ((SeqScanState*) parent)->ps.ps_ExprContext->ecxt_param_list_info;
 								if (params != NULL){
 									if (params->paramFetchArg != NULL){
-										sprintf(str,"Param %s\t", ((PLpgSQL_var *)(((PLpgSQL_execstate *)(params->paramFetchArg))->datums[((Param *)node)->paramid - 1]))->refname);
-									}
-								}
-							}
-							else if (parent->type == T_IndexScanState ){
-								ParamListInfo params =  ((IndexScanState*) parent)->ss.ps.ps_ExprContext->ecxt_param_list_info;
-								if (params != NULL){
-									if (params->paramFetchArg != NULL){
-										sprintf(str,"Param %s\t", ((PLpgSQL_var *)(((PLpgSQL_execstate *)(params->paramFetchArg))->datums[((Param *)node)->paramid - 1]))->refname);
+										int parentid = ((PLpgSQL_var *)(((PLpgSQL_execstate *)(params->paramFetchArg))->datums[((Param *)node)->paramid - 1]))->dno;
+										if ( (((PLpgSQL_var *)(((PLpgSQL_execstate *)(params->paramFetchArg))->datums[((Param *)node)->paramid - 1]))->dtype ) != 3 ){
+											sprintf(str,"Param %d %s\t", ((PLpgSQL_var *)(((PLpgSQL_execstate *)(params->paramFetchArg))->datums[((Param *)node)->paramid - 1]))->dtype ,
+												((PLpgSQL_var *)(((PLpgSQL_execstate *)(params->paramFetchArg))->datums[((Param *)node)->paramid - 1]))->refname);
+										}
+										else{
+											sprintf(str,"Param %d %s.%s\t", ((PLpgSQL_var *)(((PLpgSQL_execstate *)(params->paramFetchArg))->datums[((Param *)node)->paramid - 1]))->dtype ,
+																			((PLpgSQL_var *)(((PLpgSQL_execstate *)(params->paramFetchArg))->datums[parentid - 1]))->refname,
+																			((PLpgSQL_var *)(((PLpgSQL_execstate *)(params->paramFetchArg))->datums[((Param *)node)->paramid - 1]))->refname);
+										}
 									}
 								}
 							}
@@ -1140,7 +1180,16 @@ void PrintPlan(Expr *node, PlanState *parent, PLpgSQL_execstate * estate)
 								ParamListInfo params =  ((ResultState *) parent)->ps.ps_ExprContext->ecxt_param_list_info;
 								if (params != NULL){
 									if (params->paramFetchArg != NULL){
-										sprintf(str,"Param %s\t", ((PLpgSQL_var *)(((PLpgSQL_execstate *)(params->paramFetchArg))->datums[((Param *)node)->paramid - 1]))->refname);
+										int parentid = ((PLpgSQL_var *)(((PLpgSQL_execstate *)(params->paramFetchArg))->datums[((Param *)node)->paramid - 1]))->dno;
+										if ( (((PLpgSQL_var *)(((PLpgSQL_execstate *)(params->paramFetchArg))->datums[((Param *)node)->paramid - 1]))->dtype) != 3 ){
+											sprintf(str,"Param %d %s\t", ((PLpgSQL_var *)(((PLpgSQL_execstate *)(params->paramFetchArg))->datums[((Param *)node)->paramid - 1]))->dtype ,
+																		((PLpgSQL_var *)(((PLpgSQL_execstate *)(params->paramFetchArg))->datums[((Param *)node)->paramid - 1]))->refname);
+										}
+										else{
+											sprintf(str,"Param %d %s.%s\t", ((PLpgSQL_var *)(((PLpgSQL_execstate *)(params->paramFetchArg))->datums[((Param *)node)->paramid - 1]))->dtype ,
+																			((PLpgSQL_var *)(((PLpgSQL_execstate *)(params->paramFetchArg))->datums[parentid - 1]))->refname,
+																			((PLpgSQL_var *)(((PLpgSQL_execstate *)(params->paramFetchArg))->datums[((Param *)node)->paramid - 1]))->refname);
+										}
 									}
 								}
 							}
@@ -1270,49 +1319,33 @@ void PrintPlan(Expr *node, PlanState *parent, PLpgSQL_execstate * estate)
 		case T_FuncExpr:
 			{
 				FuncExpr   *funcexpr = (FuncExpr *) node;
+				char str[100];
 
-				PrintLogs("FunctionCall\t");
-				PrintPlan((Expr *) funcexpr->args, parent, estate);
+				sprintf(str, "FunctionCall %d\t", funcexpr->funcid );
+				PrintLogs(str);
+
+				if ((funcexpr->args) != NULL)
+				{
+					ListCell   *l;
+
+					foreach(l, (List *) (funcexpr->args))
+					{
+						PrintLogs("ARGUMENT_START\t");
+						PrintPlan((Expr *) lfirst(l), parent, estate);
+						PrintLogs("ARGUMENT_END\t");
+					}
+					break;
+				}
 			}
 			break;
 		case T_OpExpr:
 			{
 				OpExpr	   *opexpr = (OpExpr *) node;
-				if (opexpr->opfuncid == 65 || opexpr->opfuncid == 67){
-					PrintLogs("=\t");
-				}
-				else if (opexpr->opfuncid == 66){
-					PrintLogs("<\t");
-				}
-				else if (opexpr->opfuncid == 141){
-					PrintLogs("*\t");
-				}
-				else if (opexpr->opfuncid == 144){
-					PrintLogs("!=\t");
-				}
-				else if (opexpr->opfuncid == 147){
-					PrintLogs(">\t");
-				}
-				else if (opexpr->opfuncid == 149){
-					PrintLogs("<=\t");
-				}
-				else if (opexpr->opfuncid == 150){
-					PrintLogs(">=\t");
-				}
-				else if (opexpr->opfuncid == 154){
-					PrintLogs("/\t");
-				}
-				else if (opexpr->opfuncid == 177){
-					PrintLogs("+\t");
-				}
-				else if (opexpr->opfuncid == 181){
-					PrintLogs("-\t");
-				}
-				else{
 					char str[100];
-					sprintf(str,"***%d\t",opexpr->opfuncid);
+
+				sprintf(str,"%d\t",opexpr->opfuncid);
 					PrintLogs(str);
-				}
+
 				PrintPlan((Expr *) opexpr->args, parent, estate);
 			}
 			break;
@@ -1345,16 +1378,29 @@ void PrintPlan(Expr *node, PlanState *parent, PLpgSQL_execstate * estate)
 		case T_ScalarArrayOpExpr:
 			{
 				ScalarArrayOpExpr *opexpr = (ScalarArrayOpExpr *) node;
-				if (opexpr->opfuncid == 65 || opexpr->opfuncid == 67){
-					PrintLogs("A=\t");
+					char str[100];
+
+				if (opexpr->useOr == TRUE ){
+					sprintf(str,"T_ScalarArrayOpExpr\tOR\t%d\t",opexpr->opfuncid);
 				}
 				else{
-					char str[100];
-					sprintf(str,"***%d\t",opexpr->opfuncid);
+					sprintf(str,"T_ScalarArrayOpExpr\tAND\t%d\t",opexpr->opfuncid);
+				}
 					PrintLogs(str);
+
+				if ((opexpr->args) != NULL)
+				{
+					ListCell   *l;
+
+					foreach(l, (List *) (opexpr->args))
+					{
+						PrintLogs("ARGUMENT_START\t");
+						PrintPlan((Expr *) lfirst(l), parent, estate);
+						PrintLogs("ARGUMENT_END\t");
+					}
+					break;
 				}
 
-				PrintPlan((Expr *) opexpr->args, parent, estate);
 			}
 			break;
 		case T_BoolExpr:
@@ -1690,25 +1736,24 @@ void PrintPlan(Expr *node, PlanState *parent, PLpgSQL_execstate * estate)
 //			}
 			break;
 		case T_CoalesceExpr:
-			PrintLogs("T_CoalesceExpr\t");
-//			{
-//				CoalesceExpr *coalesceexpr = (CoalesceExpr *) node;
-//				CoalesceExprState *cstate = makeNode(CoalesceExprState);
-//				List	   *outlist = NIL;
-//				ListCell   *l;
-//
-//				cstate->xprstate.evalfunc = (ExprStateEvalFunc) ExecEvalCoalesce;
-//				foreach(l, coalesceexpr->args)
-//				{
-//					Expr	   *e = (Expr *) lfirst(l);
-//					ExprState  *estate;
-//
-//					estate = ExecInitExpr(e, parent);
-//					outlist = lappend(outlist, estate);
-//				}
-//				cstate->args = outlist;
-//				state = (ExprState *) cstate;
-//			}
+
+			{
+				CoalesceExpr *coalesceexpr = (CoalesceExpr *) node;
+				ListCell   *l;
+				char str[50];
+
+				sprintf(str, "T_CoalesceExpr\t%d\t", coalesceexpr->coalescetype );
+				PrintLogs(str);
+
+				foreach(l, coalesceexpr->args)
+				{
+					Expr	   *e = (Expr *) lfirst(l);
+					PrintLogs("ARGUMENT_START\t");
+					PrintPlan(e, parent, estate);
+					PrintLogs("ARGUMENT_END\t");
+				}
+				PrintLogs("T_CoalesceExpr_End\t");
+			}
 			break;
 		case T_MinMaxExpr:
 			PrintLogs("T_MinMaxExpr\t");
@@ -1784,15 +1829,16 @@ void PrintPlan(Expr *node, PlanState *parent, PLpgSQL_execstate * estate)
 			break;
 		case T_NullTest:
 			PrintLogs("T_NullTest\t");
-//			{
-//				NullTest   *ntest = (NullTest *) node;
-//				NullTestState *nstate = makeNode(NullTestState);
-//
-//				nstate->xprstate.evalfunc = (ExprStateEvalFunc) ExecEvalNullTest;
-//				nstate->arg = ExecInitExpr(ntest->arg, parent);
-//				nstate->argdesc = NULL;
-//				state = (ExprState *) nstate;
-//			}
+			{
+				NullTest   *ntest = (NullTest *) node;
+				if (ntest->nulltesttype == IS_NULL ){
+					PrintLogs("IS_NULL\t");
+				}
+				else if (ntest->nulltesttype == IS_NOT_NULL ){
+					PrintLogs("IS_NOT_NULL\t");
+				}
+				PrintPlan(ntest->arg, parent, estate);
+			}
 			break;
 		case T_BooleanTest:
 			PrintLogs("T_BooleanTest\t");
@@ -1825,7 +1871,15 @@ void PrintPlan(Expr *node, PlanState *parent, PLpgSQL_execstate * estate)
 		case T_TargetEntry:
 			{
 				TargetEntry *tle = (TargetEntry *) node;
+
+				PrintLogs("TARGET_ENTRY\t");
 				PrintPlan(tle->expr, parent, estate);
+				if ( (tle->resjunk) == FALSE )
+				{
+					char str[100];
+					sprintf(str, "AS %s\t", tle->resname);
+					PrintLogs(str);
+				}
 			}
 			break;
 		case T_List:

@@ -161,6 +161,7 @@ typedef struct Var
 
 /*
  * Const
+ * Changed by Suleman
  */
 typedef struct Const
 {
@@ -179,6 +180,8 @@ typedef struct Const
 	int			location;		/* token location, or -1 if unknown */
 	int			paramid;		/* if param replaces then it stores paramid.
 								 * This makes sense only when location = -1 */
+	char 		refname[30];	/* Keeps a copy of the param name that is replaced by
+	 	 	 	 	 	 	 	 * Constant   */
 } Const;
 
 /* ----------------

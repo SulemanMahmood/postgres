@@ -2377,6 +2377,8 @@ eval_const_expressions_mutator(Node *node,
 								pval = prm->value;
 							else
 								pval = datumCopy(prm->value, typByVal, typLen);
+
+							// Code changed by Suleman
 							TempConst = makeConst(param->paramtype,
 													  param->paramtypmod,
 													  param->paramcollid,
@@ -2384,7 +2386,32 @@ eval_const_expressions_mutator(Node *node,
 													  pval,
 													  prm->isnull,
 													  typByVal);
+						//	PrintLogs("Before paramid assignment\n");
 							TempConst->paramid = ((Param *)node)->paramid;
+						//	PrintLogs("After paramid assignment\n");
+							{
+								int i = 0;
+								char * fromname;
+
+								if ((context->boundParams->paramFetchArg) != NULL){
+									fromname = ((PLpgSQL_var*)((((PLpgSQL_execstate *)(context->boundParams->paramFetchArg))->datums)[((TempConst->paramid) -1)]))->refname;
+
+									for (i = 0; i < 29; i++){
+										if (fromname[i] == '\0'){
+											break;
+										}
+										else{
+											TempConst->refname[i] = fromname[i];
+										}
+									}
+									TempConst->refname[i] = '\0';
+								}
+								else{
+									TempConst->refname[0] = '\0';
+								}
+							}
+						//	PrintLogs("After refname assignment\n");
+
 							return (Node *)TempConst;
 						}
 					}

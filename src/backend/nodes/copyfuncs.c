@@ -1066,6 +1066,7 @@ _copyVar(const Var *from)
 
 /*
  * _copyConst
+ * Changed by Suleman
  */
 static Const *
 _copyConst(const Const *from)
@@ -1098,7 +1099,33 @@ _copyConst(const Const *from)
 	COPY_SCALAR_FIELD(constisnull);
 	COPY_SCALAR_FIELD(constbyval);
 	COPY_LOCATION_FIELD(location);
+
+//	PrintLogs("Before paramid assignment in cpoy\n");
+	if ((from->location) == -1){
 	COPY_SCALAR_FIELD(paramid);
+	}
+	else{
+		newnode->paramid = 0;
+	}
+
+//	PrintLogs("After paramid assignment in cpoy\n");
+
+	if ((from->paramid) >= 1){
+		int i = 0;
+		for (i = 0; i < 29; i++){
+			if (from->refname[i] == '\0'){
+				break;
+			}
+			else{
+				newnode->refname[i] = from->refname[i];
+			}
+		}
+	}
+	else{
+		newnode->refname[0] = '\0';
+	}
+
+//	PrintLogs("After refname assignment in cpoy\n");
 
 	return newnode;
 }

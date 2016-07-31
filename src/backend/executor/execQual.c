@@ -58,6 +58,7 @@
 #include "utils/memutils.h"
 #include "utils/typcache.h"
 #include "utils/xml.h"
+#include "executor/instrument.h"
 
 
 /* static function decls */
